@@ -1,5 +1,5 @@
-var test = artifacts.require("Greeter");
+let contract = artifacts.require("SendEther");
 
 module.exports = function(deployer) {
-    deployer.deploy(test);
+    deployer.deploy(contract);
 };
