@@ -4,11 +4,13 @@ contract Transfer {
 
     event ETransfer(address indexed _from, address indexed _to, uint256 _value);
 
-    function transfer(address payable _to) public payable {
+    function transfer(uint256 chat_id, address payable _to) public payable {
         require(msg.value > 0, "Amount must be greater than 0");
         require(address(this).balance >= msg.value, "Insufficient balance");
+        address sender = chatIdToUser[chat_id].publicAddress;
+        require(sender != address(0), "Sender not registered");
         _to.transfer(msg.value);
-        emit ETransfer(msg.sender, _to, msg.value);
+        emit ETransfer(sender, _to, msg.value);
     }
 
     struct User {
@@ -20,7 +22,7 @@ contract Transfer {
 
     mapping(uint256 => User) chatIdToUser;
 
-    function registerUser2(uint256 chatId, address publicAddress, string memory encryptedPrivateKey, string memory encryptedPhoneNumber, string memory encryptedEmailAddress) public {
+    function registerUser(uint256 chatId, address publicAddress, string memory encryptedPrivateKey, string memory encryptedPhoneNumber, string memory encryptedEmailAddress) public {
         User memory newUser = User(publicAddress, encryptedPrivateKey, encryptedPhoneNumber, encryptedEmailAddress);
         chatIdToUser[chatId] = newUser;
     }

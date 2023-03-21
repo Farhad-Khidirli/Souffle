@@ -1,1 +1,2 @@
-token = '5742945689:AAGOBL44VzR_2BOTj_pVVuiuBSYA8sAfGOY'
+import os
+token = os.environ.get('TWILIO_AUTH_TOKEN')

@@ -1,21 +1,16 @@
 import json
+
+import web3.exceptions
 from web3 import Web3
-from validate_private_key import is_found
-from email_verify import verify_email
-from twilio_verify import verify_number
+
 # Connect to Ganache
-w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:7545"))
+w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
 
 
 # Validate provided address
 def validate_address(_address):
     if _address not in w3.eth.accounts:
         raise Exception(f"Address {_address} not found in the list of accounts")
-
-
-def validate_pair(_address, _key):
-    if not is_found(_address, _key):
-        raise Exception(f"Address {_address} \n Key {_key} \n does not match")
 
 
 def get_balance(_address):
@@ -40,7 +35,7 @@ def check_transaction(_tx_receipt):
 
 
 def registration(_chat_id, _public_address, _encrypted_private_key, _phone_number, _email_address):
-    _tx_hash = my_contract.functions.registerUser2(
+    _tx_hash = my_contract.functions.registerUser(
         _chat_id, _public_address, _encrypted_private_key, _phone_number, _email_address
     ).transact()
 
@@ -50,7 +45,7 @@ def registration(_chat_id, _public_address, _encrypted_private_key, _phone_numbe
 
 def transfer(_chat_id, _receiver, _amount):
     _sender = my_contract.functions.getUserByChatId(_chat_id).call()[0]
-    _tx_hash = my_contract.functions.transfer2(_chat_id, _receiver).transact({'from': _sender, 'value': _amount})
+    _tx_hash = my_contract.functions.transfer(_chat_id, _receiver).transact({'from': _sender, 'value': _amount})
     _tx_receipt = w3.eth.waitForTransactionReceipt(_tx_hash)
     print("Checking for transfer transaction...")
     check_transaction(_tx_receipt)
@@ -79,28 +74,25 @@ with open('../build/contracts/Transfer.json', "r") as file:
 abi = data["abi"]
 bytecode = data["bytecode"]
 
-email = input("Please, enter your valid email address: ")
-verify_email(email)
-
-number = input("Please, enter US phone number; sample: {+12507329120}: ")
-for i in range(3):
-    print(f"You have {3-i} attempts to enter OTP, please be careful")
-    response = verify_number(number)
-    if response == "approved":
-        print("Success!")
-        break
-
-if response != "approved":
-    exit()
-
-
 # The address of the account that will send the Ethereum
-sender_address = Web3.toChecksumAddress(input("Enter the sender's address: "))
-validate_address(sender_address)
-w3.eth.defaultAccount = sender_address
+flag = False
+sender_address = None
+
+while not flag:
+    try:
+        sender_address = Web3.toChecksumAddress(input("Enter the sender's address: "))
+    except ValueError:
+        print(f"Invalid Ethereum address: {sender_address}")
+
+    try:
+        validate_address(sender_address)
+        w3.eth.defaultAccount = sender_address
+        flag = True
+    except Exception as e:
+        print(f"Error: {e}")
+
 
 private_key = input("Enter the sender's private key: ")
-validate_pair(sender_address, private_key)
 
 contract = w3.eth.contract(abi=abi, bytecode=bytecode)
 tx_hash = contract.constructor().transact()
@@ -138,4 +130,8 @@ transfer(2, receiver_address, amount)
 temp_id = -1
 while temp_id != 0:
     temp_id = int(input("Please, enter user's id: "))
-    get_user_by_id(temp_id)
+    try:
+        get_user_by_id(temp_id)
+    except web3.exceptions.ContractLogicError as e:
+        error_message = e.args[0]
+        print(error_message)
