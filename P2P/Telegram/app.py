@@ -1,13 +1,14 @@
 import json
+
 from eth_account import Account
 from eth_account.messages import encode_defunct, _hash_eip191_message
-from data_security import encrypt, decrypt, init_key
-from web3 import Web3
-from validate_private_key import is_found
-from email_verify import verify_email, send_email_otp
-from twilio_verify import verify_number, send_verification
-from postgresql import insert_into, retrieve_all, close_cursor, retrieve_by_id
 from key import salt, keyword
+from web3 import Web3
+
+from data_security import encrypt, decrypt, init_key
+from email_verify import verify_email, send_email_otp
+from postgresql import insert_into, retrieve_all, retrieve_by_id
+from twilio_verify import verify_number, send_verification
 
 # Connect to Ganache
 w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:7545"))

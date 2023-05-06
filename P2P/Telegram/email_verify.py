@@ -2,7 +2,6 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 import random
 
-sg = SendGridAPIClient(api_key='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')
 otp = str(random.randint(100000, 999999))
 
 

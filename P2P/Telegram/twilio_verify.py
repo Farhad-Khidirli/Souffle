@@ -1,9 +1,6 @@
 import os
 from twilio.rest import Client
 
-account_sid = "ACb74cb816e2f0e441fe7f965b0eae8b18"
-auth_token = "b673368c5ecb65fdde99b674b6a2cb49"
-verify_sid = "VA14387d6ccd59a4abafc302101457db97"
 client = Client(account_sid, auth_token)
 
 
