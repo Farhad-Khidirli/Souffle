@@ -1,17 +1,18 @@
 import json
+import os
 
 from eth_account import Account
 from eth_account.messages import encode_defunct, _hash_eip191_message
-from key import salt, keyword
 from web3 import Web3
-
-from data_security import encrypt, decrypt, init_key
-from email_verify import verify_email, send_email_otp
-from postgresql import insert_into, retrieve_all, retrieve_by_id
-from twilio_verify import verify_number, send_verification
+from components.data_security import encrypt, decrypt, init_key
+from components.email_verify import verify_email, send_email_otp
+from components.postgresql import insert_into, retrieve_all, retrieve_by_id
+from components.twilio_verify import verify_number, send_verification
 
 # Connect to Ganache
 w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:7545"))
+hex_salt, keyword = os.environ['SALT'], os.environ['KEYWORD']
+salt = bytes.fromhex(hex_salt)
 
 
 # Validate provided address
@@ -24,7 +25,6 @@ def validate_address(_address):
 
 
 def validate_pair(_address, _key):
-
     # Get the public key (address) from the private key
     account = Account.from_key(_key)
     derived_public_key = account.address

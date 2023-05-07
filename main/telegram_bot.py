@@ -1,17 +1,18 @@
 import decimal
 
 import telegram
+import os
 from telegram import *
 from telegram.ext import *
 from app import is_found_chat_id, register_for_telegram, get_user_by_id, get_balance, validate_pair, validate_address, \
     transfer as transfer_ethers
-from key import tg_token
-from twilio_verify import verify_number, send_verification
-from email_verify import verify_email, send_email_otp
+from components.twilio_verify import verify_number, send_verification
+from components.email_verify import verify_email, send_email_otp
 
 # define the start function and set a custom keyboard
 # create a bot instance and initialize the token
-bot = telegram.Bot(token=tg_token)
+TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
+bot = telegram.Bot(token=TELEGRAM_TOKEN)
 
 CANCEL, REGISTER, PRIVATE_KEY, SEND_PHONE_OTP, PHONE_NUMBER, EMAIL_ADDRESS, FINISH_REGISTRATION, VERIFY_NUMBER_OTP, VERIFY_EMAIL_OTP, TRANSFER, AMOUNT, RECIPIENT = range(
     12)
@@ -23,14 +24,13 @@ def start(update, context):
     if is_found_chat_id(user_id):
         username = update.message.from_user.first_name
         update.message.reply_text(f'Welcome back, {username}! Call /transfer for Transfer💸')
-
     else:
+        update.message.reply_text('Please, complete the registration to start using this bot.')
         return REGISTER
 
 
 def register(update, context):
     user_id = update.message.chat_id
-    update.message.reply_text('Please, complete the registration to start using this bot.')
     public_address = update.message.reply_text('Enter your public address: ')
     return PRIVATE_KEY
 
@@ -48,7 +48,7 @@ def get_private_key(update, context):
 def get_phone_number(update, context):
     if validate_pair(context.user_data['public_address'], update.message.text):
         context.user_data['private_key'] = update.message.text
-        phone_number = update.message.reply_text('Enter your phone number: ')
+        update.message.reply_text('Enter your phone number: ')
         return SEND_PHONE_OTP
     else:
         update.message.reply_text('Provided address and/or key is incorrect, start again')
@@ -58,21 +58,31 @@ def get_phone_number(update, context):
 # TESTED, WORKING (TWILIO)
 def send_phone_otp(update, context):
     context.user_data['phone_number'] = update.message.text
-    # send_verification(context.user_data['phone_number'])
+    send_verification(context.user_data['phone_number'])
     update.message.reply_text('OTP successfully sent. Please enter the OTP: ')
     context.user_data['attempts'] = 3
-    update.message.reply_text('Enter your email address: ')
-    return EMAIL_ADDRESS
-    # return VERIFY_NUMBER_OTP
+    return VERIFY_NUMBER_OTP
 
 
 def verify_number_otp(update, context):
     user_data = context.user_data
-    status = verify_number(user_data['phone_number'], update.message.text)
-    if status == 'approved':
-        update.message.reply_text('OTP verification successful!')
-        update.message.reply_text('Enter your email address: ')
-        return EMAIL_ADDRESS
+    sms_otp = update.message.text
+    if len(sms_otp) == 6 and sms_otp.isdigit():
+        status = verify_number(user_data['phone_number'], sms_otp)
+        if status == 'approved':
+            update.message.reply_text('OTP verification successful!')
+            update.message.reply_text('Enter your email address: ')
+            return EMAIL_ADDRESS
+        else:
+            user_data['attempts'] -= 1
+            if user_data['attempts'] > 0:
+                update.message.reply_text(
+                    f'Incorrect OTP. Please try again. You have {user_data["attempts"]} attempts left.')
+                update.message.reply_text('Please enter the OTP: ')
+                return VERIFY_NUMBER_OTP
+            else:
+                update.message.reply_text('Maximum number of attempts exceeded. Registration failed.')
+                return ConversationHandler.END
     else:
         user_data['attempts'] -= 1
         if user_data['attempts'] > 0:
@@ -80,27 +90,43 @@ def verify_number_otp(update, context):
                 f'Incorrect OTP. Please try again. You have {user_data["attempts"]} attempts left.')
             update.message.reply_text('Please enter the OTP: ')
             return VERIFY_NUMBER_OTP
-        else:
-            update.message.reply_text('Maximum number of attempts exceeded. Registration failed.')
-            return ConversationHandler.END
 
 
-# TEMPORARY UNAVAILABLE (SENDGRID)
+# TESTED, WORKING (SENDGRID)
 def get_email_address(update, context):
     context.user_data['email_address'] = update.message.text
     send_email_otp(context.user_data['email_address'])
 
     update.message.reply_text('OTP successfully sent. Please enter the OTP: ')
     context.user_data['attempts'] = 3
-    # return VERIFY_EMAIL_OTP
-    return FINISH_REGISTRATION
+    return VERIFY_EMAIL_OTP
 
 
 def verify_email_otp(update, context):
     user_data = context.user_data
-    if verify_email(update.message.text) == 'approved':
-        update.message.reply_text('OTP verification successful!')
-        return FINISH_REGISTRATION
+    email_otp = update.message.text
+    if len(email_otp) == 6 and email_otp.isdigit():
+        if verify_email(email_otp) == 'approved':
+            update.message.reply_text('OTP verification successful!')
+
+            register_for_telegram(update.message.chat_id,
+                                  user_data['public_address'],
+                                  user_data['private_key'],
+                                  user_data['phone_number'],
+                                  user_data['email_address'])
+            update.message.reply_text('Thank you for completing the registration!')
+            return ConversationHandler.END
+
+        else:
+            user_data['attempts'] -= 1
+            if user_data['attempts'] > 0:
+                update.message.reply_text(
+                    f'Incorrect OTP. Please try again. You have {user_data["attempts"]} attempts left.')
+                update.message.reply_text('Please enter the OTP: ')
+                return VERIFY_EMAIL_OTP
+            else:
+                update.message.reply_text('Maximum number of attempts exceeded. Registration failed.')
+                return ConversationHandler.END
     else:
         user_data['attempts'] -= 1
         if user_data['attempts'] > 0:
@@ -108,21 +134,18 @@ def verify_email_otp(update, context):
                 f'Incorrect OTP. Please try again. You have {user_data["attempts"]} attempts left.')
             update.message.reply_text('Please enter the OTP: ')
             return VERIFY_EMAIL_OTP
-        else:
-            update.message.reply_text('Maximum number of attempts exceeded. Registration failed.')
-            return ConversationHandler.END
 
 
-def end_registration(update, context):
-    user_data = context.user_data
-    update.message.reply_text('Thank you for completing the registration!')
-    register_for_telegram(update.message.chat_id,
-                          user_data['public_address'],
-                          user_data['private_key'],
-                          user_data['phone_number'],
-                          user_data['email_address'])
-    print(user_data)
-    return ConversationHandler.END
+# def end_registration(update, context):
+#     user_data = context.user_data
+#     update.message.reply_text('Thank you for completing the registration!')
+#     register_for_telegram(update.message.chat_id,
+#                           user_data['public_address'],
+#                           user_data['private_key'],
+#                           user_data['phone_number'],
+#                           user_data['email_address'])
+#     print(user_data)
+#     return ConversationHandler.END
 
 
 def transfer(update, context):
@@ -210,7 +233,7 @@ def cancel(update, context):
 
 
 def start_bot():
-    updater = Updater(token=tg_token, use_context=True)
+    updater = Updater(token=TELEGRAM_TOKEN, use_context=True)
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start), CommandHandler('info', info),
@@ -223,7 +246,7 @@ def start_bot():
             VERIFY_NUMBER_OTP: [MessageHandler(Filters.text, verify_number_otp)],
             EMAIL_ADDRESS: [MessageHandler(Filters.text, get_email_address)],
             VERIFY_EMAIL_OTP: [MessageHandler(Filters.text, verify_email_otp)],
-            FINISH_REGISTRATION: [MessageHandler(Filters.text, end_registration)],
+            # FINISH_REGISTRATION: [MessageHandler(Filters.text, end_registration)],
             TRANSFER: [CallbackQueryHandler(transfer_callback)],
             RECIPIENT: [MessageHandler(Filters.text & ~Filters.command, recipient)],
             AMOUNT: [MessageHandler(Filters.text & ~Filters.command, amount)]
